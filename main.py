@@ -31,24 +31,29 @@ def display_thresholds(letter_grades):
         print '{:<2} ({:>2}) [ {:>5.2f} - {:>5.2f} ]'.format(letter, len(grades), min(grades), max(grades))
 
 
-def validate_input_file(file_name):
-    if file_name.split(".")[-1] != "txt" and file_name.split(".")[-1] != "pdf":
+def validate_input_path(path):
+    extension = get_extension(path)
+    if extension not in ('pdf', 'txt'):
         raise argparse.ArgumentTypeError("L'extension du fichier de resultats finaux doit etre '.txt' ou '.pdf'")
     else:
-        return file_name
+        return path
+
+
+def get_extension(path):
+    return path.split(".")[-1].lower()
 
 
 def main():
     parser = argparse.ArgumentParser(description="Analyse des seuils de grades pour un cours")
-    parser.add_argument('filename', help="Fichier de resultats finaux", type=validate_input_file)
+    parser.add_argument('path', help="Fichier de resultats finaux", type=validate_input_path)
     arg = parser.parse_args()
 
-    extension = arg.filename.split(".")[-1].lower()
+    extension = get_extension(arg.path)
     if extension == "txt":
-        with open(arg.filename, 'r') as content_file:
+        with open(arg.path, 'r') as content_file:
             file_content = content_file.read()
     elif extension == "pdf":
-        file_content = get_pdf_content(arg.filename).encode("utf8", "ignore")
+        file_content = get_pdf_content(arg.path).encode("utf8", "ignore")
 
     letter_grades = parse_grade_doc(file_content)
     display_thresholds(letter_grades)
