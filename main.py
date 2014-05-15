@@ -1,46 +1,34 @@
 #/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
 import argparse
-import string
+import re
+from collections import defaultdict
+
 from PyPDF2 import PdfFileReader
-from collections import OrderedDict
-from letters import Letter
 
 
-def get_PDF_content(path):
-    content = ""
+def parse_grade_doc(text):
+    matches = re.findall('(\s[A-F](?:\*|\+|\s))\s*\|\s*([0-9.]+)', text)
+    print len(matches), 'notes :'
+
+    letter_grades = defaultdict(list)
+    for letter, note in matches:
+        letter_grades[letter].append(float(note))
+    return letter_grades
+
+
+def get_pdf_content(path):
     # Load PDF into pyPDF
     pdf = PdfFileReader(file(path, "rb"))
-    # Iterate pages
-    for i in range(0, pdf.getNumPages()):
-        # Extract text from page and add to content
-        content += pdf.getPage(i).extractText() + "\n"
-    # Collapse whitespace
-    content = " ".join(content.replace(u"\xa0", " ").strip().split())
-    return content
+    # Iterate on pages and merge extracted text
+    page_text = '\n'.join([pdf.getPage(i).extractText() for i in xrange(pdf.getNumPages())])
+    return page_text
 
 
-def display_format(value):
-    return str(format(value, '.2f'))
-
-
-def display_thresholds(dictionary):
-    cpt = 0
-    for key, letter in dictionary.iteritems():
-        cpt += letter.cpt
-    print str(cpt) + " notes analysees"
-    print ""
-
-    for key, letter in dictionary.iteritems():
-        print string.ljust(key,2),string.ljust(' (' + str(letter.cpt) + '):', 5) ,
-        if letter.cpt > 1:
-            print "[" + display_format(letter.min) + " , " + display_format(letter.max) + "]"
-        elif letter.cpt == 1:
-            print "[" + display_format(letter.min)+"]"
-        else:
-            print "-"
+def display_thresholds(letter_grades):
+    for letter, grades in sorted(letter_grades.items(), key=lambda x: max(x[1]), reverse=True):
+        print '{:<2} ({:>2}) [ {:>5.2f} - {:>5.2f} ]'.format(letter, len(grades), min(grades), max(grades))
 
 
 def validate_input_file(file_name):
@@ -50,40 +38,21 @@ def validate_input_file(file_name):
         return file_name
 
 
-def main(argv):
-    parser = argparse.ArgumentParser(description="Analyse des seuils de notes pour un cours")
+def main():
+    parser = argparse.ArgumentParser(description="Analyse des seuils de grades pour un cours")
     parser.add_argument('filename', help="Fichier de resultats finaux", type=validate_input_file)
     arg = parser.parse_args()
 
-    if arg.filename.split(".")[-1] == "txt":
+    extension = arg.filename.split(".")[-1].lower()
+    if extension == "txt":
         with open(arg.filename, 'r') as content_file:
             file_content = content_file.read()
-    elif arg.filename.split(".")[-1] == "pdf":
-        file_content = get_PDF_content(arg.filename).encode("utf8", "ignore")
+    elif extension == "pdf":
+        file_content = get_pdf_content(arg.filename).encode("utf8", "ignore")
 
-    dict_letters = OrderedDict()
-    for letter_value in ['A*', 'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F']:
-        dict_letters.update({letter_value: Letter(letter_value)})
+    letter_grades = parse_grade_doc(file_content)
+    display_thresholds(letter_grades)
 
-    for i in range(len(file_content)):
-        for key, letter in dict_letters.iteritems():
-            search_string = " " + letter.letter_value + " "
-
-            if file_content[i:i+len(search_string)] == search_string:
-                while file_content[i] != "|":
-                    i += 1
-                i += 1
-
-                grade_str = ""
-                while file_content[i] != "|":
-                    grade_str += file_content[i]
-                    i += 1
-
-                letter.check_extrema(float(grade_str))
-
-                letter.cpt += 1
-
-    display_thresholds(dict_letters)
 
 if __name__ == "__main__":
-        main(sys.argv)
+    main()
